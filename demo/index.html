@@ -1,0 +1,116 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1, user-scalable=yes">
+    <title>paper-leavebehind Demo</title>
+    <script src="../../webcomponentsjs/webcomponents-lite.js"></script>
+    <link rel="import" href="../paper-leavebehind.html">
+    <link rel="import" href="../../paper-styles/demo-pages.html">
+    <link rel="import" href="../../paper-toast/paper-toast.html">
+    <link rel="import" href="../../paper-button/paper-button.html">
+    <link rel="import" href="../../iron-icons/iron-icons.html">
+    <link rel="import" href="../../iron-flex-layout/iron-flex-layout.html">
+    <style is="custom-style">
+    </style>
+  </head>
+  <body unresolved>
+    <style is="custom-style">
+      .list {
+        border: 1px solid var(--divider-color);
+        margin: 20px auto;
+        width: 360px;
+      }
+      .item-content,
+      .leavebehind-content {
+        padding: 16px;
+      }
+      .who {
+        @apply(--paper-font-subhead);
+      }
+      .info {
+        padding-right: 16px;
+      }
+      .what, .notes, .when {
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        margin-bottom: 4px;
+      }
+      .notes, .when, .icon {
+        color: var(--secondary-text-color);
+      }
+    </style>
+    <template is="dom-bind">
+      <div class="list">
+        <template is="dom-repeat" items="[[activity]]">
+          <paper-leavebehind icon="delete">
+            <div class="item-content layout horizontal">
+              <div class="flex layout vertical info">
+                <div class="who">{{item.who}}</div>
+                <div class="what">{{item.what}}</div>
+                <div class="notes">{{item.notes}}</div>
+              </div>
+              <div class="layout vertical">
+                <div class="when self-start">{{item.when}}</div>
+                <div class="flex layout horizontal end-justified end">
+                  <iron-icon icon="star-border" class="icon"></iron-icon>
+                </div>
+              </div>
+            </div>
+            <div class="leavebehind-content layout horizontal">
+              <label>Are you sure?</label>
+              <paper-button on-tap="confirm">Yes</paper-button>
+              <paper-button on-tap="cancel">No</paper-button>
+            </div>
+          </paper-leavebehind>
+        </template>
+      </div>
+    </template>
+  </body>
+  <script>
+    var scope = document.querySelector('template[is="dom-bind"]');
+    scope.activity = [
+      {
+        what: 'Brunch this weekend?',
+        who: 'Ali Conners',
+        when: '15 min',
+        notes: 'I\'ll be in your neighborhood doing errands this afternoon'
+      },
+      {
+        what: 'Summer BBQ',
+        who: 'me, Scott, Jennifer',
+        when: '2 hr',
+        notes: 'Wish I could come out but I\'m out of town this weekend'
+      },
+      {
+        what: 'Oui Oui',
+        who: 'Sandra Adams',
+        when: '6 hr',
+        notes: 'Do you have Paris recommendations? Have you ever been?'
+      },
+      {
+        what: 'Birthday Gift',
+        who: 'Trevor Hansen',
+        when: '12 hr',
+        notes: 'Have any ideas of what we should get Heidi for her birthday?'
+      },
+      {
+        what: 'Recipe to try',
+        who: 'Brian Holt',
+        when: '18 hr',
+        notes: 'We should eat this: Grapefruit, Squash, Corn, and Tomatillo tacos'
+      },
+      {
+        what: 'Giants game',
+        who: 'David Park',
+        when: '1 day',
+        notes: 'Any interest in seeing the Giants play next Sunday?'
+      },
+    ];
+    
+    scope.onSwipe = function() {
+    };
+  </script>
+</html>

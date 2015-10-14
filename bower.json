@@ -1,0 +1,37 @@
+{
+  "name": "paper-leavebehind",
+  "version": "1.0.0",
+  "authors": [
+    "Ben Davis <bendavis78@gmail.com>"
+  ],
+  "description": "A leave-behind is an informative hint as to what swiping a list item away will do to that item.",
+  "keywords": [
+    "web-component",
+    "web-components",
+    "polymer",
+    "chip",
+    "leave-behind",
+    "paper-leavebehind"
+  ],
+  "main": "paper-leavebehind.html",
+  "license": "MIT",
+  "homepage": "http://bendavis78.github.io/paper-leavebehind/",
+  "ignore": [
+    "/.*",
+    "/tests/"
+  ],
+  "dependencies": {
+    "polymer": "Polymer/polymer#^1.0.0",
+    "iron-flex-layout": "PolymerElements/iron-flex-layout#^1.0.0",
+    "iron-icon": "PolymerElements/paper-icon-button#^1.0.0",
+    "paper-styles": "PolymerElements/paper-styles#^1.0.0",
+    "paper-material": "PolymerElements/paper-material#^1.0.0",
+    "paper-ripple": "PolymerElements/paper-ripple#^1.0.0"
+  },
+  "devDependencies": {
+    "iron-component-page": "PolymerElements/iron-component-page#^1.0.0",
+    "iron-icon": "PolymerElements/iron-icons#^1.0.0",
+    "paper-toast": "PolymerElements/paper-toast#^1.0.0",
+    "paper-button": "PolymerElements/paper-toast#^1.0.0"
+  }
+}
