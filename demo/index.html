@@ -17,7 +17,7 @@
   </head>
   <body unresolved>
     <style is="custom-style">
-      .list {
+      #list {
         border: 1px solid var(--divider-color);
         margin: 0 auto;
         max-width: 360px;
@@ -41,19 +41,22 @@
       .notes, .when, .icon {
         color: var(--secondary-text-color);
       }
+      .undo {
+        color: #eeff41;
+      }
       @media (max-width: 400px) {
         body {
           padding: 20px 0;
         }
-        .list {
+        #list {
           width: 100%;
         }
       }
     </style>
     <template is="dom-bind">
-      <div class="list">
+      <div id="list">
         <template is="dom-repeat" items="[[activity]]">
-          <paper-leavebehind icon="delete">
+          <paper-leavebehind icon="delete" on-remove="onRemove">
             <div class="item-content layout horizontal">
               <div class="flex layout vertical info">
                 <div class="who">{{item.who}}</div>
@@ -76,6 +79,9 @@
             </div>
           </paper-leavebehind>
         </template>
+        <paper-toast id="message" text="The item was deleted." duration="5000">
+          <paper-button on-tap="undo" class="undo">Undo</paper-button> 
+        </paper-toast>
       </div>
     </template>
   </body>
@@ -118,9 +124,41 @@
         when: '1 day',
         notes: 'Any interest in seeing the Giants play next Sunday?'
       },
+      {
+        what: 'Brunch this weekend?',
+        who: 'Ali Conners',
+        when: '15 min',
+        notes: 'I\'ll be in your neighborhood doing errands this afternoon'
+      },
+      {
+        what: 'Summer BBQ',
+        who: 'me, Scott, Jennifer',
+        when: '2 hr',
+        notes: 'Wish I could come out but I\'m out of town this weekend'
+      },
+      {
+        what: 'Oui Oui',
+        who: 'Sandra Adams',
+        when: '6 hr',
+        notes: 'Do you have Paris recommendations? Have you ever been?'
+      },
     ];
     
-    scope.onSwipe = function() {
+    var removed, sibling;
+    scope.onRemove = function(event) {
+      // save element so that we can undo later.
+      removed = event.target; 
+      sibling = removed.nextElementSibling || null;
+      scope.$.message.show();
+    };
+
+    scope.undo = function() {
+      if (!sibling) {
+        scope.$.list.appendChild(removed);
+      } else {
+        scope.$.list.insertBefore(removed, sibling);
+      }
+      removed.reset();
     };
   </script>
 </html>

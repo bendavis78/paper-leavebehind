@@ -8,9 +8,40 @@
 <!--
 Material Design: [List Controls](http://www.google.com/design/spec/components/lists-controls.html#lists-controls-types-of-list-controls)
 
-A leave-behind is an informative hint as to what swiping a list item away will do to that item.
+A "leave-behind" is an informative hint as to what swiping a list item away will do to that item. When swiping this
+item to the left or right, an icon is revealed providing a hint of what action will be performed. Additional
+content may be shown in the leave-behind area. 
 
-TODO: docs
+If the item is swiped more than 50% of the way, the `swipe` event is triggered. Otherwise, the item is reset to its
+original state.
+
+## Examples
+
+Basic leave-behind that removes immediately upon swiping:
+
+    <paper-leavebehind icon="delete" remove-on-swipe on-remove="showMessage">
+      <div class="layout horizontal center">
+        <div>{{time}}</div><div>{{subject}}</div>
+      </div>
+    </paper-leavebehind>
+
+You can provide content in the leave-behind area using an element with the `leavebehind-content` class name. For
+convenience, you can designate "remove" and "reset" buttons by assign the `leavebehind-remove` and
+`levebehind-reset` attributes:
+
+    <paper-leavebehind icon-"delete" on-remove="showMessage">
+      <div class="layout horzontal center">
+        <div>{{time}}</div><div>{{subject}}</div>
+      </div>
+      <div class="lavebehind-content layout vertical center center-justified">
+        <label>Are you sure you want to delete this?</label>
+        <div class="layout horizontal">
+          <paper-button leavebehind-remove>Yes</paper-button>
+          <paper-button leavebehind-reset>No</paper-button>
+        </div>
+      </div>
+    </paper-leavebehind>
+
 
 @element paper-leavebehind
 @blurb 
@@ -66,10 +97,13 @@ TODO: docs
         position: relative;
         border-bottom: 1px solid var(--paper-leavebehind-divider-color, --divider-color);
       }
-      #container.animating.remove {
-        transition: height 300ms var(--ease-out-quint);
-        --webkit-transition: height 300ms var(--ease-out-quint);
-        border-bottom: 0;
+      #container.animating {
+        transition: height 1000ms var(--ease-out-quint);
+        --webkit-transition: height 1000ms var(--ease-out-quint);
+      }
+      #container.remove {
+        height: 0;
+        border-bottom: 1px solid rgba(0,0,0,0);
       }
       .icon {
         color: var(--paper-leavebehind-icon-color, --secondary-text-color);
@@ -130,7 +164,10 @@ TODO: docs
   </template>
   <script>
   (function() {
-    // TODO move approppriate methods to iron-swipable-behavior
+    // In 0.5, this was set in polymer-gestures/src/track.js
+    // This is equal to Δx² + Δy²
+    var WIGGLE_THRESHOLD = 4;
+
     Polymer({
       is: 'paper-leavebehind',
       properties: {
@@ -168,15 +205,31 @@ TODO: docs
       reset: function() {
         this._translateX(this._contentLeft, 'reset');
         this.set('_containerClass', '');
+        this.$.container.style.height = '';
       },
+      /**
+       * Fired before the element is removed. This event is cancelable. If canceled, the element will remain
+       * hidden, and can be restored by calling the `reset()` method. Otherwise, the element will remove itself
+       * from its parent.
+       * 
+       * @event remove
+       */
       remove: function() {
-        this._once(this._transitionEvent, function() {
-          this.parentElement.removeChild(this);
-        }.bind(this), this);
+        this.set('_containerClass', 'animating');
         this.set('_containerClass', 'animating remove');
-        this.$.container.style.height = this.$.container.offsetHeight + 'px';
-        window.requestAnimationFrame(function() {
+        this.async(function() {
           this.$.container.style.height = '0px';
+          this.$.container.addEventListener(this._transitionEvent, function() {
+            // reset so that the element can be restored if needed.
+            this._translateX(this._contentLeft);
+            this.set('_containerClass',  'remove');
+          }.bind(this));
+          var e = this.fire('remove', {}, this, false, true);
+          if (!e.defaultPrevented) {
+            this._once(this._transitionEvent, function() {
+              this.parentElement.removeChild(this);
+            }.bind(this), this);
+          }
         }.bind(this));
       },
       _once: function(eventName, callback, node) {
@@ -187,13 +240,20 @@ TODO: docs
         }
         node.addEventListener(eventName, onceCallback);
       },
+      /**
+       * Fired when the element was swiped to reveal the leavebehind.
+       * 
+       * @event swiped
+       */
       _track: function(event) {
-        var state = event.detail.state;
-        var x;
+        this.setScrollDirection('x'); // allow vertical scroll
+        var detail = event.detail;
+        var state = detail.state;
+        var dx = event.detail.dx;
+        var dy = event.detail.dy;
+        var adx = Math.abs(dx);
+        var ady = Math.abs(dy);
         if (state === 'start') {
-          this._dragging = true;
-          // TODO slight ripple when starting swipe
-          this._dragStart = event.detail.x;
           if (!this._contentLeft) {
             this._contentLeft = this.$.content.offsetLeft;
           }
@@ -202,9 +262,9 @@ TODO: docs
           }
         }
         if (state === 'end') {
-          this._dragging = false;
-          x = event.detail.x - this._dragStart;
-          if (!this.disabled && (Math.abs(x) / this._containerWidth) > 0.5) {
+          this._gesture = 'pan-x';
+          var percentageSwiped = (adx / this._containerWidth);
+          if (!this.disabled && this._gesture === 'pan-x' && percentageSwiped > 0.5) {
             this.set('_containerClass', 'swiped');
             this._translateX(this._containerWidth, 'swipe', function() {
               this.fire('swiped');
@@ -212,14 +272,31 @@ TODO: docs
           } else {
             this.reset();
           }
+          this._gesture= null;
         }
-        if (this._dragging && state === 'track') {
-          x = (event.detail.x - this._dragStart);
+        if (state === 'track') {
+          var distance = Math.sqrt((dx * dx) + (dy * dy));
+
+          // don't detect movement within WIGGLE_THRESHOLD
+          if (!this._gesture && distance > WIGGLE_THRESHOLD) {
+            this._gesture = adx > ady ? 'pan-x' : 'pan-y';
+          }
+          console.log(this._gesture);
+
+          // only drag during pan-x gesture
+          if (this._gesture !== 'pan-x') {
+            return;
+          }
+
+          // TODO slight ripple when starting swipe, provide no-ripple option
+          this._dragging = true;
+
+          var x = dx;
           if (this.disabled) {
             // add "resistence" easing;
             var p, max = 64, width = this._containerWidth;
-            p = Math.abs(x) > width ? 1 : Math.abs(x) / width;
-            x = max * (x < 0 ? -1 : 1) * (1 - Math.pow(1 - p, 2));
+            p = Math.abs(dx) > width ? 1 : Math.abs(dx) / width;
+            x = max * (dx < 0 ? -1 : 1) * (1 - Math.pow(1 - p, 2));
           }
           this._translateX(x);
         }
