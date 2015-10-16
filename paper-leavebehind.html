@@ -22,15 +22,23 @@ TODO: docs
     <style>
       :host {
         display: block;
-        border-bottom: 1px solid var(--paper-leavebehind-divider-color, --divider-color);
         cursor: default;
+
         -webkit-touch-callout: none;
         -webkit-user-select: none;
         -khtml-user-select: none;
         -moz-user-select: none;
         -ms-user-select: none;
         user-select: none;
-        @apply(--paper-leavebehind-content);
+
+        --ease-in-sine: cubic-bezier(0.47, 0, 0.745, 0.715);
+        --ease-out-sine: cubic-bezier(0.39, 0.575, 0.565, 1);
+        --ease-in-out-sine: cubic-bezier(0.445, 0.05, 0.55, 0.95);
+
+        --ease-in-quint: cubic-bezier(0.755, 0.05, 0.855, 0.06);
+        --ease-out-quint: cubic-bezier(0.23, 1, 0.32, 1);
+
+        @apply(--paper-leavebehind);
       }
       #content {
         background: var(--paper-leavebehind-background, --primary-background-color);
@@ -39,31 +47,54 @@ TODO: docs
         z-index: 3;
         position: relative;
       }
-      #content:not(.dragging) {
-        transition: transform 500ms cubic-bezier(0.4, 0, 0.2, 1); 
-        -webkit-animation-fill-mode: both;
-        animation-fill-mode: both;
+      #content.animating.swipe {
+        transition: transform 300ms var(--ease-in-sine);
+        --webkit-transition: transform 300ms var(--ease-in-sine);
+      }
+      #content.animating.reset {
+        transition: transform 300ms var(--ease-out-sine);
+        --webkit-transition: transform 300ms var(--ease-out-sine);
       }
       #ripple {
         pointer-events: none;
       }
-      .container {
+      #container {
         z-index: 0;
         padding: 0;
         overflow: hidden;
         background: #e0e0e0;
         position: relative;
+        border-bottom: 1px solid var(--paper-leavebehind-divider-color, --divider-color);
+      }
+      #container.animating.remove {
+        transition: height 300ms var(--ease-out-quint);
+        --webkit-transition: height 300ms var(--ease-out-quint);
+        border-bottom: 0;
       }
       .icon {
-        color: var(--paper-leavebehind-icon-color, --primary-text-color);
+        color: var(--paper-leavebehind-icon-color, --secondary-text-color);
+        margin: 16px;
         @apply(--paper-leavebehind-icon);
       }
-      .leavebehind-content-container, .leavebehind-icons {
+      .leavebehind-content-container,
+      .leavebehind-icons {
         position: absolute;
         width: 100%;
         height: 100%;
         z-index: 1;
         left: 0;
+        transition: opacity 500ms var(--ease-in-out-sine);
+        --webkit-transition: opacity 500ms var(--ease-in-out-sine);
+      }
+      .leavebehind-content-container,
+      #container.swiped .leavebehind-icons {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .leavebehind-icons,
+      #container.swiped .leavebehind-content-container {
+        opacity: 1;
+        pointer-events: auto;
       }
       .top, .bottom {
         pointer-events: none;
@@ -81,18 +112,17 @@ TODO: docs
       }
     </style>
 
-    <div class="container">
+    <div id="container" class$="{{_containerClass}}">
       <div class="leavebehind-content-container">
         <content select=".leavebehind-content"></content>
       </div>
-      <div class="leavebehind-icons layout horizontal">
-        <iron-icon icon="[[icon]]" class="icon layout self-start"></iron-icon>
-        <iron-icon icon="[[icon]]" class="icon layout self-end"></iron-icon>
+      <div class="leavebehind-icons layout horizontal center justified">
+        <iron-icon icon="[[icon]]" class="icon"></iron-icon>
+        <iron-icon icon="[[icon]]" class="icon"></iron-icon>
       </div>
       <paper-material elevation="[[elevation]]" class="top"></paper-material>
       <paper-material elevation="[[elevation]]" class="bottom"></paper-material>
-      <paper-material id="content" elevation="[[elevation]]" on-track="_track" 
-        class$="{{_contentClass(_dragging)}}">
+      <paper-material id="content" elevation="[[elevation]]" on-track="_track" class$="{{_contentClass}}">
         <content select=":not(.leavebehind-content)"></content>
       </paper-material>
     </div>
@@ -113,38 +143,103 @@ TODO: docs
           value: false,
           reflectToAttribute: true
         },
+        _removeButton: {
+          type: Object,
+          value: function() {
+            return Polymer.dom(this).querySelector('[leavebehind-remove]');
+          }
+        },
+        _resetButton: {
+          type: Object,
+          value: function() {
+            return Polymer.dom(this).querySelector('[leavebehind-reset]');
+          }
+        }
+      },
+      ready: function() {
+        this._transitionEvent = this.style.WebkitTransition ? 'transitionEnd' : 'webkitTransitionEnd';
+        if (this._removeButton) {
+          this._removeButton.addEventListener('tap', this.remove.bind(this));
+        }
+        if (this._resetButton) {
+          this._resetButton.addEventListener('tap', this.reset.bind(this));
+        }
+      },
+      reset: function() {
+        this._translateX(this._contentLeft, 'reset');
+        this.set('_containerClass', '');
+      },
+      remove: function() {
+        this._once(this._transitionEvent, function() {
+          this.parentElement.removeChild(this);
+        }.bind(this), this);
+        this.set('_containerClass', 'animating remove');
+        this.$.container.style.height = this.$.container.offsetHeight + 'px';
+        window.requestAnimationFrame(function() {
+          this.$.container.style.height = '0px';
+        }.bind(this));
+      },
+      _once: function(eventName, callback, node) {
+        node = node || this;
+        function onceCallback() {
+          node.removeEventListener(eventName, onceCallback);
+          callback.apply(null, arguments);
+        }
+        node.addEventListener(eventName, onceCallback);
       },
       _track: function(event) {
         var state = event.detail.state;
+        var x;
         if (state === 'start') {
+          this._dragging = true;
           // TODO slight ripple when starting swipe
-          this.set('_dragging', true);
           this._dragStart = event.detail.x;
-          this._contentLeft = this.$.content.offsetLeft;
-          this._contentWidth = this.$.content.offsetWidth;
+          if (!this._contentLeft) {
+            this._contentLeft = this.$.content.offsetLeft;
+          }
+          if (!this._containerWidth) {
+            this._containerWidth = this.$.container.offsetWidth;
+          }
         }
         if (state === 'end') {
-          this.set('_dragging', false);
-          this.transform('translateX(' + this._contentLeft + 'px)', this.$.content);
+          this._dragging = false;
+          x = event.detail.x - this._dragStart;
+          if (!this.disabled && (Math.abs(x) / this._containerWidth) > 0.5) {
+            this.set('_containerClass', 'swiped');
+            this._translateX(this._containerWidth, 'swipe', function() {
+              this.fire('swiped');
+            }.bind(this));
+          } else {
+            this.reset();
+          }
         }
-        if (state === 'track') {
-          window.requestAnimationFrame(function() {
-            var x = (event.detail.x - this._dragStart);
-            if (this.disabled) {
-              // add "resistence" easing;
-              var max = 64;
-              var p = x > this._contentWidth ? 1 : x / this._contentWidth;
-              x = max * (1 - Math.pow(1 - p, 2));
-            }
-            this.transform('translateX(' + x + 'px)', this.$.content);
-          }.bind(this));
+        if (this._dragging && state === 'track') {
+          x = (event.detail.x - this._dragStart);
+          if (this.disabled) {
+            // add "resistence" easing;
+            var p, max = 64, width = this._containerWidth;
+            p = Math.abs(x) > width ? 1 : Math.abs(x) / width;
+            x = max * (x < 0 ? -1 : 1) * (1 - Math.pow(1 - p, 2));
+          }
+          this._translateX(x);
         }
       },
-      _contentClass() {
-        if (this._dragging) {
-          return 'dragging';
+      _translateX: function(x, transition, cb) {
+        if (transition) {
+          this._once(this._transitionEvent, function() {
+            this.set('_contentClass', '');
+            if (cb) {
+              cb();
+            }
+          }.bind(this), this.$.content);
+          this.set('_contentClass', 'animating ' + transition);
         }
-        return '';
+        window.requestAnimationFrame(function() {
+          this.transform('translateX(' + x + 'px)', this.$.content);
+        }.bind(this));
+      },
+      _class: function(value, className) {
+        return value ? className : '';
       }
     });
   })();

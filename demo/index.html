@@ -19,8 +19,8 @@
     <style is="custom-style">
       .list {
         border: 1px solid var(--divider-color);
-        margin: 20px auto;
-        width: 360px;
+        margin: 0 auto;
+        max-width: 360px;
       }
       .item-content,
       .leavebehind-content {
@@ -41,6 +41,14 @@
       .notes, .when, .icon {
         color: var(--secondary-text-color);
       }
+      @media (max-width: 400px) {
+        body {
+          padding: 20px 0;
+        }
+        .list {
+          width: 100%;
+        }
+      }
     </style>
     <template is="dom-bind">
       <div class="list">
@@ -59,10 +67,12 @@
                 </div>
               </div>
             </div>
-            <div class="leavebehind-content layout horizontal">
-              <label>Are you sure?</label>
-              <paper-button on-tap="confirm">Yes</paper-button>
-              <paper-button on-tap="cancel">No</paper-button>
+            <div class="leavebehind-content layout vertical center center-justified">
+              <label>Are you sure you want to delete this?</label>
+              <div class="layout horizontal">
+                <paper-button leavebehind-remove>Yes</paper-button>
+                <paper-button leavebehind-reset>No</paper-button>
+              </div>
             </div>
           </paper-leavebehind>
         </template>
