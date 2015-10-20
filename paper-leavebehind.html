@@ -12,8 +12,8 @@ A "leave-behind" is an informative hint as to what swiping a list item away will
 item to the left or right, an icon is revealed providing a hint of what action will be performed. Additional
 content may be shown in the leave-behind area. 
 
-If the item is swiped more than 50% of the way, the `swipe` event is triggered. Otherwise, the item is reset to its
-original state.
+If the item is flicked or swiped more than 2/3 of the way, the `swipe` event is
+triggered. Otherwise, the item is reset to its original state.
 
 ## Examples
 
@@ -25,9 +25,10 @@ Basic leave-behind that removes immediately upon swiping:
       </div>
     </paper-leavebehind>
 
-You can provide content in the leave-behind area using an element with the `leavebehind-content` class name. For
-convenience, you can designate "remove" and "reset" buttons by assign the `leavebehind-remove` and
-`levebehind-reset` attributes:
+You can provide content in the leave-behind area using an element with the
+`leavebehind-content` class name. For convenience, you can designate "remove"
+and "reset" buttons by assign the `leavebehind-remove` and `levebehind-reset`
+attributes:
 
     <paper-leavebehind icon-"delete" on-remove="showMessage">
       <div class="layout horzontal center">
@@ -77,6 +78,14 @@ convenience, you can designate "remove" and "reset" buttons by assign the `leave
         display: block;
         z-index: 3;
         position: relative;
+      }
+      @keyframes swipe-out {
+        from {
+          transform: 'translateX(0)';
+        }
+        to {
+          transform: 'translateX(100%)';
+        }
       }
       #content.animating.swipe {
         transition: transform 300ms var(--ease-in-sine);
@@ -164,9 +173,14 @@ convenience, you can designate "remove" and "reset" buttons by assign the `leave
   </template>
   <script>
   (function() {
-    // In 0.5, this was set in polymer-gestures/src/track.js
-    // This is equal to Δx² + Δy²
+    // Ignore movement within this distance (px)
     var WIGGLE_THRESHOLD = 4;
+    // what constitues a flick (px/ms)
+    var FLICK_SPEED = 0.5;
+    // Factor for "springy" resistance effect when item is disabled.
+    var RESISTANCE_FACTOR = 2;
+    // Swipe-to-remove distance as percentage of container width
+    var SWIPE_REMOVE_DISTANCE = 66;
 
     Polymer({
       is: 'paper-leavebehind',
@@ -194,18 +208,30 @@ convenience, you can designate "remove" and "reset" buttons by assign the `leave
         }
       },
       ready: function() {
+        // allow vertical scroll in parent container
+        this.setScrollDirection('y', this.$.content);
+
         this._transitionEvent = this.style.WebkitTransition ? 'transitionEnd' : 'webkitTransitionEnd';
         if (this._removeButton) {
           this._removeButton.addEventListener('tap', this.remove.bind(this));
         }
         if (this._resetButton) {
-          this._resetButton.addEventListener('tap', this.reset.bind(this));
+          this._resetButton.addEventListener('tap', function(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            this.reset();
+          }.bind(this), true);
         }
       },
       reset: function() {
         this._translateX(this._contentLeft, 'reset');
         this.set('_containerClass', '');
         this.$.container.style.height = '';
+
+        // FIXME/KLUDGE: 
+        // For some odd reason, if we tap the reset button, touch events aren't handled on the content div. 
+        // Weirdly enough this goes away when add a dummy listener event on the element.
+        this._once('touchstart', function() {});
       },
       /**
        * Fired before the element is removed. This event is cancelable. If canceled, the element will remain
@@ -240,65 +266,101 @@ convenience, you can designate "remove" and "reset" buttons by assign the `leave
         }
         node.addEventListener(eventName, onceCallback);
       },
+      _getFastestMovement: function(event) {
+        // detect flick based on fastest segment of movement
+        var l = this._moveQueue.length;
+        var dt, tx, ty, tv, x = 0, y = 0, v = 0;
+        for (var i = 0, m; i < l && (m = this._moveQueue[i]); i++) {
+          dt = event.timeStamp - m.timeStamp;
+          tx = (event.detail.x - m.detail.x) / dt;
+          ty = (event.detail.y - m.detail.y) / dt;
+          tv = Math.sqrt(tx * tx + ty * ty);
+          if (tv > v) {
+            x = tx;
+            y = ty;
+            v = tv;
+          }
+        }
+        return {x: x, y: y, v: v};
+      },
       /**
        * Fired when the element was swiped to reveal the leavebehind.
        * 
        * @event swiped
        */
       _track: function(event) {
-        this.setScrollDirection('y'); // allow vertical scroll
         var detail = event.detail;
         var state = detail.state;
         var dx = event.detail.dx;
         var dy = event.detail.dy;
         var adx = Math.abs(dx);
         var ady = Math.abs(dy);
+
         if (state === 'start') {
+          this._trackStartTime = (new Date()).getTime();
           if (!this._contentLeft) {
             this._contentLeft = this.$.content.offsetLeft;
           }
           if (!this._containerWidth) {
             this._containerWidth = this.$.container.offsetWidth;
           }
+          this._moveQueue = [];
+        }
+        if (state === 'track') {
+          if (this._moveQueue.length >= 4) {
+            this._moveQueue.shift();
+          }
+          this._moveQueue.push(event);
+
+          var distance = Math.sqrt((dx * dx) + (dy * dy));
+
+          // ignore movement within WIGGLE_THRESHOLD
+          if (!this._gesture && distance > WIGGLE_THRESHOLD) {
+            this._gesture = adx > ady ? 'pan-x' : 'pan-y';
+          }
+
+          // only drag during pan-x gesture
+          if (this._gesture !== 'pan-x') {
+            // don't scroll while swiping
+            this.setScrollDirection('x', this.$.content);
+            return;
+          }
+
+          // TODO add a slight ripple when starting swipe, provide no-ripple option
+          this._dragging = true;
+
+          var x = dx;
+          if (this.disabled) {
+            // add "resistence" when disabled using simple easing formula;
+            var p, max = 64, width = this._containerWidth;
+            p = Math.abs(dx) > width ? 1 : Math.abs(dx) / width;
+            x = max * (dx < 0 ? -1 : 1) * (1 - Math.pow(1 - p, RESISTANCE_FACTOR));
+          }
+          this._translateX(x);
         }
         if (state === 'end') {
-          this._gesture = 'pan-x';
-          var percentageSwiped = (adx / this._containerWidth);
-          if (!this.disabled && this._gesture === 'pan-x' && percentageSwiped > 0.5) {
+          var speed = this._getFastestMovement(event).v;
+          var removeThreshold = this._containerWidth * (SWIPE_REMOVE_DISTANCE / 100);
+          var remove = adx > removeThreshold || speed > FLICK_SPEED;
+          if (!this.disabled && this._gesture === 'pan-x' && remove) {
+            // calculate an ideal transition duration based on current speed of swipe
+            var newDuration = (this._containerWidth  - adx) / speed;
+            if (newDuration > 300) {
+              newDuration = 300;
+            }
+            console.log('newDuration: ', newDuration);
+            this.$.content.style.transitionDuration = newDuration + 'ms';
             this.set('_containerClass', 'swiped');
             this._translateX(this._containerWidth, 'swipe', function() {
+              this.$.container.style.transitionDuration = 300;
               this.fire('swiped');
             }.bind(this));
           } else {
             this.reset();
           }
+          // allow scrolling again
+          this.setScrollDirection('y', this.$.content);
           this._gesture= null;
-        }
-        if (state === 'track') {
-          var distance = Math.sqrt((dx * dx) + (dy * dy));
-
-          // don't detect movement within WIGGLE_THRESHOLD
-          if (!this._gesture && distance > WIGGLE_THRESHOLD) {
-            this._gesture = adx > ady ? 'pan-x' : 'pan-y';
-          }
-          console.log(this._gesture);
-
-          // only drag during pan-x gesture
-          if (this._gesture !== 'pan-x') {
-            return;
-          }
-
-          // TODO slight ripple when starting swipe, provide no-ripple option
-          this._dragging = true;
-
-          var x = dx;
-          if (this.disabled) {
-            // add "resistence" easing;
-            var p, max = 64, width = this._containerWidth;
-            p = Math.abs(dx) > width ? 1 : Math.abs(dx) / width;
-            x = max * (dx < 0 ? -1 : 1) * (1 - Math.pow(1 - p, 2));
-          }
-          this._translateX(x);
         }
       },
       _translateX: function(x, transition, cb) {
