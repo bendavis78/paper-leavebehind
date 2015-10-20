@@ -194,6 +194,11 @@ attributes:
           value: false,
           reflectToAttribute: true
         },
+        autoRemove: {
+          type: Boolean,
+          value: false,
+          observer: '_autoRemoveChanged'
+        },
         _removeButton: {
           type: Object,
           value: function() {
@@ -207,20 +212,19 @@ attributes:
           }
         }
       },
+      created: function() {
+        this._boundRemove = this.remove.bind(this);
+        this._boundReset = this.reset.bind(this);
+      },
       ready: function() {
         // allow vertical scroll in parent container
         this.setScrollDirection('y', this.$.content);
-
         this._transitionEvent = this.style.WebkitTransition ? 'transitionEnd' : 'webkitTransitionEnd';
         if (this._removeButton) {
-          this._removeButton.addEventListener('tap', this.remove.bind(this));
+          this._removeButton.addEventListener('tap', this._boundRemove);
         }
         if (this._resetButton) {
-          this._resetButton.addEventListener('tap', function(event) {
-            event.preventDefault();
-            event.stopPropagation();
-            this.reset();
-          }.bind(this), true);
+          this._resetButton.addEventListener('tap', this._boundReset);
         }
       },
       reset: function() {
@@ -253,7 +257,7 @@ attributes:
           var e = this.fire('remove', {}, this, false, true);
           if (!e.defaultPrevented) {
             this._once(this._transitionEvent, function() {
-              this.parentElement.removeChild(this);
+              this.parentNode.removeChild(this);
             }.bind(this), this);
           }
         }.bind(this));
@@ -348,7 +352,6 @@ attributes:
             if (newDuration > 300) {
               newDuration = 300;
             }
-            console.log('newDuration: ', newDuration);
             this.$.content.style.transitionDuration = newDuration + 'ms';
             this.set('_containerClass', 'swiped');
             this._translateX(this._containerWidth, 'swipe', function() {
@@ -376,6 +379,13 @@ attributes:
         window.requestAnimationFrame(function() {
           this.transform('translateX(' + x + 'px)', this.$.content);
         }.bind(this));
+      },
+      _autoRemoveChanged: function(autoRemove) {
+        if (autoRemove) {
+          this.addEventListener('swiped', this._boundRemove);
+        } else {
+          this.removeEventListener('swiped', this._boundRemove);
+        }
       },
       _class: function(value, className) {
         return value ? className : '';
