@@ -212,19 +212,21 @@ attributes:
           }
         }
       },
-      created: function() {
-        this._boundRemove = this.remove.bind(this);
-        this._boundReset = this.reset.bind(this);
-      },
       ready: function() {
         // allow vertical scroll in parent container
         this.setScrollDirection('y', this.$.content);
         this._transitionEvent = this.style.WebkitTransition ? 'transitionEnd' : 'webkitTransitionEnd';
         if (this._removeButton) {
-          this._removeButton.addEventListener('tap', this._boundRemove);
+          this._removeButton.addEventListener('tap', function(event) {
+            event.stopPropagation();
+            this.remove();
+          }.bind(this));
         }
         if (this._resetButton) {
-          this._resetButton.addEventListener('tap', this._boundReset);
+          this._resetButton.addEventListener('tap', function(event) {
+            event.stopPropagation();
+            this.reset();
+          }.bind(this));
         }
       },
       reset: function() {
@@ -254,12 +256,13 @@ attributes:
             this._translateX(this._contentLeft);
             this.set('_containerClass',  'remove');
           }.bind(this));
-          var e = this.fire('remove', {}, this, false, true);
-          if (!e.defaultPrevented) {
-            this._once(this._transitionEvent, function() {
+          this._once(this._transitionEvent, function() {
+            var e = this.fire('remove', {item: this}, {bubbles: false, cancelable: true});
+            if (!e.defaultPrevented) {
+              console.log('default not prevented');
               this.parentNode.removeChild(this);
-            }.bind(this), this);
-          }
+            }
+          }.bind(this), this);
         }.bind(this));
       },
       _once: function(eventName, callback, node) {
