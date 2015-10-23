@@ -257,9 +257,8 @@ attributes:
             this.set('_containerClass',  'remove');
           }.bind(this));
           this._once(this._transitionEvent, function() {
-            var e = this.fire('remove', {item: this}, {bubbles: false, cancelable: true});
+            var e = this.fire('remove', {}, {bubbles: false, cancelable: true});
             if (!e.defaultPrevented) {
-              console.log('default not prevented');
               this.parentNode.removeChild(this);
             }
           }.bind(this), this);
